@@ -41,6 +41,17 @@ An ultra-premium, dark-glassmorphism **Real Estate Website & Management System**
    - **Frontend:** [http://localhost/real estate/index.php](http://localhost/real%20estate/index.php)
    - **Admin Login:** [http://localhost/real estate/admin/login.php](http://localhost/real%20estate/admin/login.php)
 
+### ⚡ Instant Zero-Config Dev (Built-in PHP Server)
+No MySQL or Apache needed! The system automatically detects offline MySQL and falls back seamlessly to an included SQLite database with all demo properties, agents, and settings:
+```bash
+cd "real estate"
+php database/setup.php
+php -S localhost:8000
+```
+Then visit:
+- **Frontend:** [http://localhost:8000](http://localhost:8000)
+- **Admin Panel:** [http://localhost:8000/admin/login.php](http://localhost:8000/admin/login.php)
+
 ### Default Admin Credentials
 - **Email:** `admin@ruiruprimeproperties.co.ke`
 - **Password:** `admin123`

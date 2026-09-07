@@ -8,7 +8,7 @@ $user = 'root';
 $pass = '';
 
 try {
-    echo "Connecting to MySQL server...\n";
+    echo "Connecting to MySQL server ($host)...\n";
     $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
     ]);
@@ -21,12 +21,12 @@ try {
 
     $sql = file_get_contents($sqlFile);
 
-    // Split SQL by semicolons, accounting for multi-query execution
-    echo "Executing database initialization...\n";
+    echo "Executing MySQL database initialization...\n";
     $pdo->exec($sql);
 
-    echo "SUCCESS: Database ruiru_realestate created and seeded successfully!\n";
+    echo "SUCCESS: MySQL database ruiru_realestate created and seeded successfully!\n";
 } catch (PDOException $e) {
-    echo "ERROR: " . $e->getMessage() . "\n";
-    exit(1);
+    echo "Notice: MySQL connection failed (" . $e->getMessage() . ").\n";
+    echo "Initializing local SQLite database fallback instead...\n";
+    require_once __DIR__ . '/init_sqlite.php';
 }

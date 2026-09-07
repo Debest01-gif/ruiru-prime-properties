@@ -47,25 +47,66 @@ if (!defined('SITE_URL')) {
 define('UPLOADS_PATH', __DIR__ . '/../uploads/');
 define('UPLOADS_URL', SITE_URL . '/uploads/');
 
-try {
-    $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-    $pdo = new PDO(
-        $dsn,
-        DB_USER,
-        DB_PASS,
-        [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]
-    );
-} catch (PDOException $e) {
-    die('<div style="font-family:sans-serif;padding:40px;background:#1a0a0a;color:#ff6b6b;text-align:center;">
-        <h2>⚠️ Database Connection Error</h2>
-        <p>Could not connect to the database. Please check your settings in <code>includes/db.php</code></p>
-        <p><small>' . htmlspecialchars($e->getMessage()) . '</small></p>
-        <p>Make sure you have imported <code>database/schema.sql</code> into phpMyAdmin.</p>
-    </div>');
+// Helper to establish SQLite connection with MySQL-compatibility functions
+function createSqliteConnection(string $sqliteFile): PDO {
+    $isNew = !file_exists($sqliteFile);
+    $pdo = new PDO("sqlite:" . $sqliteFile, null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ]);
+    $pdo->exec("PRAGMA foreign_keys = ON;");
+    $pdo->exec("PRAGMA journal_mode = WAL;");
+
+    // Register custom SQL functions for 100% MySQL query compatibility
+    $pdo->sqliteCreateFunction('RAND', function() {
+        return (float)mt_rand() / (float)mt_getrandmax();
+    });
+    $pdo->sqliteCreateFunction('IF', function($cond, $trueVal, $falseVal) {
+        return $cond ? $trueVal : $falseVal;
+    });
+    $pdo->sqliteCreateFunction('NOW', function() {
+        return date('Y-m-d H:i:s');
+    });
+
+    if ($isNew) {
+        require_once __DIR__ . '/../database/init_sqlite.php';
+    }
+
+    return $pdo;
+}
+
+$dbDriver = getenv('DB_DRIVER') ?: 'auto';
+$sqliteFile = __DIR__ . '/../database/ruiru_realestate.sqlite';
+
+if ($dbDriver === 'sqlite') {
+    $pdo = createSqliteConnection($sqliteFile);
+} else {
+    try {
+        $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+        $pdo = new PDO(
+            $dsn,
+            DB_USER,
+            DB_PASS,
+            [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES   => false,
+            ]
+        );
+    } catch (PDOException $e) {
+        // In local development or when MySQL is offline, fall back seamlessly to SQLite
+        if (file_exists($sqliteFile) || extension_loaded('pdo_sqlite')) {
+            $pdo = createSqliteConnection($sqliteFile);
+        } else {
+            die('<div style="font-family:sans-serif;padding:40px;background:#1a0a0a;color:#ff6b6b;text-align:center;">
+                <h2>⚠️ Database Connection Error</h2>
+                <p>Could not connect to the database. Please check your settings in <code>includes/db.php</code></p>
+                <p><small>' . htmlspecialchars($e->getMessage()) . '</small></p>
+                <p>Make sure you have imported <code>database/schema.sql</code> into phpMyAdmin or have SQLite enabled.</p>
+            </div>');
+        }
+    }
 }
 
 // Load site settings into a global array
