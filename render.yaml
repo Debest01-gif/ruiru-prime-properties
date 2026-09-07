@@ -5,6 +5,8 @@ services:
     plan: free
     region: frankfurt
     envVars:
+      # Optional: set these for MySQL (e.g. from Aiven/Railway/PlanetScale)
+      # Leave blank to use the bundled SQLite database automatically
       - key: DB_HOST
         sync: false
       - key: DB_USER
@@ -15,3 +17,9 @@ services:
         sync: false
       - key: DB_PORT
         value: "3306"
+      - key: PORT
+        value: "10000"
+    disk:
+      name: uploads
+      mountPath: /var/www/html/uploads
+      sizeGB: 1
