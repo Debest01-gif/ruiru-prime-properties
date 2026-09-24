@@ -1,25 +1,36 @@
 FROM php:8.2-apache
 
-# Install system dependencies - use apt-get update before each install to get fresh package lists
-RUN apt-get update && apt-get install -y \
-    libpng-dev \
-    libjpeg62-turbo-dev \
-    libfreetype6-dev \
-    libzip-dev \
-    libwebp-dev \
-    libxpm-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+# NOTE: php:8.2-apache is based on Debian Bookworm - must use libjpeg62-turbo-dev (not libjpeg-dev)
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        libpng-dev \
+        libjpeg62-turbo-dev \
+        libfreetype6-dev \
+        libwebp-dev \
+        libxpm-dev \
+        libzip-dev \
+        zlib1g-dev \
+    ; \
+    rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions — gd with all modern image format support
-RUN docker-php-ext-configure gd \
-    --with-freetype \
-    --with-jpeg \
-    --with-webp \
- && docker-php-ext-install -j$(nproc) \
+# Configure and install GD with explicit library paths
+RUN set -eux; \
+    CFLAGS="-I/usr/include/freetype2" \
+    docker-php-ext-configure gd \
+        --with-freetype=/usr/include/freetype2 \
+        --with-jpeg=/usr \
+        --with-webp=/usr \
+        --with-xpm=/usr \
+    ; \
+    docker-php-ext-install -j$(nproc) gd
+
+# Install remaining PHP extensions
+RUN docker-php-ext-install -j$(nproc) \
     pdo \
     pdo_mysql \
     pdo_sqlite \
-    gd \
     mbstring \
     zip \
     opcache
@@ -34,7 +45,10 @@ WORKDIR /var/www/html
 COPY . /var/www/html/
 
 # Create database and uploads directories and set permissions
-RUN mkdir -p /var/www/html/uploads/properties /var/www/html/uploads/agents /var/www/html/uploads/blog /var/www/html/database \
+RUN mkdir -p /var/www/html/uploads/properties \
+              /var/www/html/uploads/agents \
+              /var/www/html/uploads/blog \
+              /var/www/html/database \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/database /var/www/html/uploads
 
