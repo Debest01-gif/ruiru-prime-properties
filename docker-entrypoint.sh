@@ -1,17 +1,36 @@
 #!/bin/bash
 set -e
 
-# Configure Apache to listen on the PORT provided by Render (default 10000)
 PORT="${PORT:-10000}"
 
-echo "[entrypoint] Configuring Apache on port ${PORT}..."
+echo "[entrypoint] Configuring Apache for PORT=${PORT}..."
 
-# Replace Apache listening port across all configuration files
-sed -i -e "s/Listen 80/Listen ${PORT}/g" /etc/apache2/ports.conf
-sed -i -e "s/:80/:${PORT}/g" /etc/apache2/sites-available/*.conf 2>/dev/null || true
-sed -i -e "s/:80/:${PORT}/g" /etc/apache2/sites-enabled/*.conf 2>/dev/null || true
+# Configure Apache listening ports (both 80 and $PORT)
+cat <<EOF > /etc/apache2/ports.conf
+Listen 80
+Listen ${PORT}
+EOF
 
-# Suppress FQDN warning
+# Configure default VirtualHost to handle all traffic and allow .htaccess overrides
+cat <<EOF > /etc/apache2/sites-available/000-default.conf
+<VirtualHost *:80 *:${PORT}>
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www/html
+
+    <Directory /var/www/html>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog \${APACHE_LOG_DIR}/error.log
+    CustomLog \${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+EOF
+
+a2ensite 000-default.conf >/dev/null 2>&1 || true
+
+# Suppress Apache FQDN warning
 echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf
 a2enconf servername >/dev/null 2>&1 || true
 
@@ -31,5 +50,5 @@ mkdir -p /var/www/html/database /var/www/html/uploads/properties /var/www/html/u
 chown -R www-data:www-data /var/www/html/database /var/www/html/uploads
 chmod -R 775 /var/www/html/database /var/www/html/uploads
 
-echo "[entrypoint] Ready. Starting Apache..."
+echo "[entrypoint] Apache configured. Starting server on ports 80 and ${PORT}..."
 exec "$@"
