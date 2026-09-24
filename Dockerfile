@@ -18,10 +18,10 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . /var/www/html/
 
-# Create uploads directories and set permissions
-RUN mkdir -p /var/www/html/uploads/properties /var/www/html/uploads/agents /var/www/html/uploads/blog \
+# Create database and uploads directories and set permissions
+RUN mkdir -p /var/www/html/uploads/properties /var/www/html/uploads/agents /var/www/html/uploads/blog /var/www/html/database \
     && chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/uploads
+    && chmod -R 775 /var/www/html/database /var/www/html/uploads
 
 # Entrypoint: configure Apache port at runtime, then seed DB if needed
 COPY docker-entrypoint.sh /docker-entrypoint.sh

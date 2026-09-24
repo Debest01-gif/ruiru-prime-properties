@@ -4,34 +4,39 @@
  * Ruiru Prime Properties
  */
 
-$dbHost = getenv('DB_HOST') ?: 'localhost';
-$dbUser = getenv('DB_USER') ?: 'root';
-$dbPass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '';
-$dbName = getenv('DB_NAME') ?: 'ruiru_realestate';
-$dbPort = getenv('DB_PORT') ?: '3306';
+$envHost = getenv('DB_HOST');
+$envUser = getenv('DB_USER');
+$envPass = getenv('DB_PASS');
+$envName = getenv('DB_NAME');
+$envPort = getenv('DB_PORT');
+$envUrl  = getenv('DATABASE_URL') ?: getenv('MYSQL_URL');
 
-// Support full URL format commonly provided by cloud platforms like Render
-$dbUrl = getenv('DATABASE_URL') ?: getenv('MYSQL_URL');
-if ($dbUrl) {
-    $parts = parse_url($dbUrl);
-    if (!empty($parts['host'])) $dbHost = $parts['host'];
-    if (!empty($parts['user'])) $dbUser = $parts['user'];
-    if (isset($parts['pass']))  $dbPass = $parts['pass'];
-    if (!empty($parts['path'])) $dbName = ltrim($parts['path'], '/');
-    if (!empty($parts['port'])) $dbPort = $parts['port'];
+if ($envUrl) {
+    $parts = parse_url($envUrl);
+    if (!empty($parts['host'])) $envHost = $parts['host'];
+    if (!empty($parts['user'])) $envUser = $parts['user'];
+    if (isset($parts['pass']))  $envPass = $parts['pass'];
+    if (!empty($parts['path'])) $envName = ltrim($parts['path'], '/');
+    if (!empty($parts['port'])) $envPort = $parts['port'];
 }
 
-define('DB_HOST', $dbHost);
-define('DB_USER', $dbUser);
-define('DB_PASS', $dbPass);
-define('DB_NAME', $dbName);
-define('DB_PORT', $dbPort);
+$hasMysqlConfig = !empty($envHost);
+
+define('DB_HOST', $hasMysqlConfig ? $envHost : 'localhost');
+define('DB_USER', $hasMysqlConfig ? ($envUser ?: 'root') : 'root');
+define('DB_PASS', $hasMysqlConfig ? ($envPass !== false ? $envPass : '') : '');
+define('DB_NAME', $hasMysqlConfig ? ($envName ?: 'ruiru_realestate') : 'ruiru_realestate');
+define('DB_PORT', $hasMysqlConfig ? ($envPort ?: '3306') : '3306');
 define('DB_CHARSET', 'utf8mb4');
 
-// Dynamic Site URL detection (works on Apache, PHP dev server, and live cPanel/hosting)
+// Dynamic Site URL detection (works on Apache, PHP dev server, Docker, Render, cPanel)
 if (!defined('SITE_URL')) {
     if (isset($_SERVER['HTTP_HOST'])) {
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+            || (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')
+            || (!empty($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+        $protocol = $isHttps ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'];
         $docRoot = !empty($_SERVER['DOCUMENT_ROOT']) ? str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'])) : '';
         $appRoot = str_replace('\\', '/', realpath(dirname(__DIR__)));
@@ -49,11 +54,17 @@ define('UPLOADS_URL', SITE_URL . '/uploads/');
 
 // Helper to establish SQLite connection with MySQL-compatibility functions
 function createSqliteConnection(string $sqliteFile): PDO {
-    $isNew = !file_exists($sqliteFile);
+    $dir = dirname($sqliteFile);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0777, true);
+    }
+
+    $isNew = !file_exists($sqliteFile) || filesize($sqliteFile) === 0;
     $pdo = new PDO("sqlite:" . $sqliteFile, null, null, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
+        PDO::ATTR_TIMEOUT            => 5,
     ]);
     $pdo->exec("PRAGMA foreign_keys = ON;");
     $pdo->exec("PRAGMA journal_mode = WAL;");
@@ -70,16 +81,18 @@ function createSqliteConnection(string $sqliteFile): PDO {
     });
 
     if ($isNew) {
+        ob_start();
         require_once __DIR__ . '/../database/init_sqlite.php';
+        ob_end_clean();
     }
 
     return $pdo;
 }
 
-$dbDriver = getenv('DB_DRIVER') ?: 'auto';
+$dbDriver = getenv('DB_DRIVER') ?: ($hasMysqlConfig ? 'mysql' : 'sqlite');
 $sqliteFile = __DIR__ . '/../database/ruiru_realestate.sqlite';
 
-if ($dbDriver === 'sqlite') {
+if ($dbDriver === 'sqlite' || (!$hasMysqlConfig && $dbDriver !== 'mysql')) {
     $pdo = createSqliteConnection($sqliteFile);
 } else {
     try {
@@ -92,10 +105,11 @@ if ($dbDriver === 'sqlite') {
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
+                PDO::ATTR_TIMEOUT            => 3,
             ]
         );
     } catch (PDOException $e) {
-        // In local development or when MySQL is offline, fall back seamlessly to SQLite
+        // Fall back seamlessly to SQLite
         if (file_exists($sqliteFile) || extension_loaded('pdo_sqlite')) {
             $pdo = createSqliteConnection($sqliteFile);
         } else {
@@ -113,10 +127,14 @@ if ($dbDriver === 'sqlite') {
 function getSettings(PDO $pdo): array {
     static $settings = null;
     if ($settings === null) {
-        $stmt = $pdo->query("SELECT setting_key, setting_value FROM settings");
-        $settings = [];
-        while ($row = $stmt->fetch()) {
-            $settings[$row['setting_key']] = $row['setting_value'];
+        try {
+            $stmt = $pdo->query("SELECT setting_key, setting_value FROM settings");
+            $settings = [];
+            while ($row = $stmt->fetch()) {
+                $settings[$row['setting_key']] = $row['setting_value'];
+            }
+        } catch (Exception $e) {
+            $settings = [];
         }
     }
     return $settings;

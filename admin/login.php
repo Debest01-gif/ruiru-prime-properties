@@ -3,8 +3,8 @@
  * Admin Login Page
  */
 session_start();
-require_once '../includes/db.php';
-require_once '../includes/functions.php';
+require_once dirname(__DIR__) . '/includes/db.php';
+require_once dirname(__DIR__) . '/includes/functions.php';
 
 // Already logged in
 if (isAdminLoggedIn()) {

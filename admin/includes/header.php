@@ -3,8 +3,8 @@
  * Admin Sidebar & Header Include
  */
 session_start();
-require_once dirname(__DIR__) . '/includes/db.php';
-require_once dirname(__DIR__) . '/includes/functions.php';
+require_once dirname(__DIR__, 2) . '/includes/db.php';
+require_once dirname(__DIR__, 2) . '/includes/functions.php';
 requireAdmin();
 
 $currentAdmin = $_SESSION['admin_name'] ?? 'Admin';
