@@ -1,0 +1,16 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell scripts must always use LF line endings
+*.sh text eol=lf
+
+# Explicitly declare text files you want to always be normalized and converted to native line endings on checkout.
+*.php text
+*.css text
+*.js text
+*.html text
+*.sql text
+*.json text
+*.md text
+*.yaml text
+*.yml text

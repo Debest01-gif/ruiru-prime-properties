@@ -19,7 +19,9 @@ services:
         value: "3306"
       - key: PORT
         value: "10000"
-    disk:
-      name: uploads
-      mountPath: /var/www/html/uploads
-      sizeGB: 1
+    # Optional persistent disk: Requires Starter plan ($7/mo+) or above.
+    # On Free plan, leave commented out to use container storage.
+    # disk:
+    #   name: uploads
+    #   mountPath: /var/www/html/uploads
+    #   sizeGB: 1
